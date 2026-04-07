@@ -1,0 +1,58 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs & temp ---
+*.log
+*.tmp
+*.temp
+
+# --- Generic archives ---
+*.zip
+*.rar
+*.7z
+
+# --- Build / distribution outputs ---
+build/
+dist/
+*.egg-info/
+
+# --- C/C++ / Arduino build artifacts ---
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+
+# --- Optional local data ---
+# Uncomment if you generate recordings/images locally and don't want them in git
+# Images/Output/
