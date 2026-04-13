@@ -4,8 +4,8 @@
 #include <esp_camera.h>
 
 // Replace with your Wi-Fi credentials
-const char *ssid = "Your_SSID";
-const char *password = "Your_PASSWORD";
+const char *ssid = "kiddonet";
+const char *password = "GpNkG58nkQHN";
 
 // Camera configuration
 #define PWDN_GPIO_NUM -1
