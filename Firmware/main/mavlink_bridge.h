@@ -29,9 +29,15 @@
 
 #define BRIDGE_QUEUE_LEN 16
 #define MAVLINK_PACKET_MAX_LEN 300
+#define MAVLINK_TEST_SYSTEM_ID 245
+#define MAVLINK_TEST_COMPONENT_ID 191
+#define MAVLINK_HEARTBEAT_LED_GPIO GPIO_NUM_15
+#define MAVLINK_HEARTBEAT_PERIOD_MS 1000
+#define MAVLINK_HEARTBEAT_LED_PULSE_MS 75
 
 extern QueueHandle_t fcu_to_udp_queue;
 
 void mavlink_bridge_rx_task(void* pvParameters);
+void mavlink_bridge_heartbeat_probe_task(void* pvParameters);
 void mavlink_bridge_init(void);
 void mavlink_bridge_init_queues(void);

@@ -1,0 +1,13 @@
+# Keep USB Serial/JTAG available for the binary camera stream, not console logs.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+# CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG is not set
+CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=y
+
+# ESP32-S3-WROOM-1U-N16R8 has 8 MB octal PSRAM.
+CONFIG_SPIRAM=y
+# CONFIG_SPIRAM_MODE_QUAD is not set
+CONFIG_SPIRAM_MODE_OCT=y
+
+# ESP32-S3 can DMA camera frames directly into PSRAM; keep this on for clean config/builds.
+CONFIG_CAMERA_PSRAM_DMA=y

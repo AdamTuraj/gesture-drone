@@ -2,11 +2,62 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "esp_err.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "mavlink_bridge.h"
 
+static const char* TAG = "mavlink_bridge";
+
 QueueHandle_t fcu_to_udp_queue = NULL;
+
+static void mavlink_bridge_write_message(const mavlink_message_t* msg)
+{
+    uint8_t tx_buffer[MAVLINK_PACKET_MAX_LEN];
+    uint16_t tx_len = mavlink_msg_to_send_buffer(tx_buffer, msg);
+
+    uart_write_bytes(UART_NUM, tx_buffer, tx_len);
+}
+
+static void mavlink_bridge_send_heartbeat_probe(void)
+{
+    mavlink_message_t heartbeat;
+    mavlink_msg_heartbeat_pack(MAVLINK_TEST_SYSTEM_ID,
+                               MAVLINK_TEST_COMPONENT_ID,
+                               &heartbeat,
+                               MAV_TYPE_GCS,
+                               MAV_AUTOPILOT_INVALID,
+                               0,
+                               0,
+                               MAV_STATE_ACTIVE);
+    mavlink_bridge_write_message(&heartbeat);
+
+    mavlink_message_t request;
+    mavlink_msg_command_long_pack(MAVLINK_TEST_SYSTEM_ID,
+                                  MAVLINK_TEST_COMPONENT_ID,
+                                  &request,
+                                  1,
+                                  MAV_COMP_ID_AUTOPILOT1,
+                                  MAV_CMD_REQUEST_MESSAGE,
+                                  0,
+                                  (float)MAVLINK_MSG_ID_HEARTBEAT,
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  0,
+                                  0);
+    mavlink_bridge_write_message(&request);
+}
+
+static void mavlink_bridge_pulse_heartbeat_led(void)
+{
+    gpio_set_level(MAVLINK_HEARTBEAT_LED_GPIO, 1);
+    vTaskDelay(pdMS_TO_TICKS(MAVLINK_HEARTBEAT_LED_PULSE_MS));
+    gpio_set_level(MAVLINK_HEARTBEAT_LED_GPIO, 0);
+}
 
 void mavlink_bridge_rx_task(void* pvParameters)
 {
@@ -26,6 +77,41 @@ void mavlink_bridge_rx_task(void* pvParameters)
                 {
                     xQueueSend(fcu_to_udp_queue, &msg, portMAX_DELAY);
                 }
+            }
+        }
+    }
+}
+
+void mavlink_bridge_heartbeat_probe_task(void* pvParameters)
+{
+    gpio_config_t led_config = {
+        .pin_bit_mask = 1ULL << MAVLINK_HEARTBEAT_LED_GPIO,
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&led_config));
+    gpio_set_level(MAVLINK_HEARTBEAT_LED_GPIO, 0);
+
+    TickType_t last_probe = xTaskGetTickCount() - pdMS_TO_TICKS(MAVLINK_HEARTBEAT_PERIOD_MS);
+
+    while (1)
+    {
+        TickType_t now = xTaskGetTickCount();
+        if ((now - last_probe) >= pdMS_TO_TICKS(MAVLINK_HEARTBEAT_PERIOD_MS))
+        {
+            mavlink_bridge_send_heartbeat_probe();
+            last_probe = now;
+        }
+
+        mavlink_message_t msg;
+        if (xQueueReceive(fcu_to_udp_queue, &msg, pdMS_TO_TICKS(100)) == pdTRUE)
+        {
+            if (msg.msgid == MAVLINK_MSG_ID_HEARTBEAT)
+            {
+                ESP_LOGI(TAG, "FC heartbeat from system %u component %u", msg.sysid, msg.compid);
+                mavlink_bridge_pulse_heartbeat_led();
             }
         }
     }

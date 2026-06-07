@@ -12,17 +12,25 @@
 #define CAM_PIN_SIOD 42
 #define CAM_PIN_SIOC 41
 
-#define CAM_PIN_D7 21
-#define CAM_PIN_D6 48
-#define CAM_PIN_D5 12
-#define CAM_PIN_D4 10
-#define CAM_PIN_D3 11
-#define CAM_PIN_D2 13
-#define CAM_PIN_D1 9
-#define CAM_PIN_D0 8
+#define CAM_PIN_D7 7
+#define CAM_PIN_D6 6
+#define CAM_PIN_D5 21
+#define CAM_PIN_D4 48
+#define CAM_PIN_D3 12
+#define CAM_PIN_D2 10
+#define CAM_PIN_D1 11
+#define CAM_PIN_D0 13
+
 #define CAM_PIN_VSYNC 39
 #define CAM_PIN_HREF 38
 #define CAM_PIN_PCLK 47
+
+#define CAMERA_XCLK_FREQ_HZ 10000000
+
+#define CAMERA_FRAME_SIZE FRAMESIZE_VGA
+#define CAMERA_JPEG_QUALITY 10
+
+#define CAMERA_CAPTURE_INTERVAL_MS 100
 
 #define CAMERA_CHUNK_MAGIC 0x304D4143u
 #define CAMERA_CHUNK_PAYLOAD_SIZE 1200

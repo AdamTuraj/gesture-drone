@@ -5,12 +5,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
 static const char* TAG = "camera";
 
 QueueHandle_t camera_frames = NULL;
+
+#define CAMERA_FRAME_QUEUE_LEN 32
+#define CAMERA_QUEUE_SEND_TIMEOUT_MS 2000
+#define CAMERA_WARMUP_FRAMES 5
 
 static camera_config_t camera_config = {
     .pin_pwdn = CAM_PIN_PWDN,
@@ -31,19 +36,59 @@ static camera_config_t camera_config = {
     .pin_href = CAM_PIN_HREF,
     .pin_pclk = CAM_PIN_PCLK,
 
-    .xclk_freq_hz = 20000000,
+    // 10 MHz is easier on the parallel camera bus than the default 20 MHz.
+    .xclk_freq_hz = CAMERA_XCLK_FREQ_HZ,
     .ledc_timer = LEDC_TIMER_0,
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG, // YUV422,GRAYSCALE,RGB565,JPEG
     .frame_size =
-        FRAMESIZE_QVGA, // QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the
-                        // ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
+        CAMERA_FRAME_SIZE, // QQVGA-UXGA, For ESP32, do not use sizes above QVGA when not JPEG. The performance of the
+                           // ESP32-S series has improved a lot, but JPEG mode always gives better frame rates.
 
-    .jpeg_quality = 12, // 0-63, for OV series camera sensors, lower number means higher quality
+    .jpeg_quality = CAMERA_JPEG_QUALITY, // 0-63, for OV series camera sensors, lower number means higher quality
     .fb_count = 1, // When jpeg mode is used, if fb_count more than one, the driver will work in continuous mode.
     .grab_mode = CAMERA_GRAB_WHEN_EMPTY, // CAMERA_GRAB_LATEST. Sets when buffers should be filled
-    .fb_location = CAMERA_FB_IN_PSRAM};
+    .fb_location = CAMERA_FB_IN_PSRAM,
+};
+
+static bool camera_frame_is_complete_jpeg(const camera_fb_t* fb)
+{
+    return fb && fb->format == PIXFORMAT_JPEG && fb->len >= 4 && fb->buf[0] == 0xff && fb->buf[1] == 0xd8 &&
+        fb->buf[fb->len - 2] == 0xff && fb->buf[fb->len - 1] == 0xd9;
+}
+
+static void camera_log_capture_config(void)
+{
+    sensor_t* sensor = esp_camera_sensor_get();
+    if (sensor)
+    {
+        ESP_LOGI(
+            TAG,
+            "Sensor PID=0x%04x, frame_size=%d, jpeg_quality=%d, xclk=%d Hz, psram_dma=%s",
+            (unsigned)sensor->id.PID,
+            camera_config.frame_size,
+            camera_config.jpeg_quality,
+            camera_config.xclk_freq_hz,
+            esp_camera_get_psram_mode() ? "on" : "off");
+    }
+}
+
+static void camera_discard_warmup_frames(void)
+{
+    for (int i = 0; i < CAMERA_WARMUP_FRAMES; i++)
+    {
+        camera_fb_t* fb = esp_camera_fb_get();
+        if (fb)
+        {
+            esp_camera_fb_return(fb);
+        }
+        else
+        {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+}
 
 static void split_frame_and_send_to_queue(camera_fb_t* fb, uint32_t frame_id)
 {
@@ -82,7 +127,7 @@ static void split_frame_and_send_to_queue(camera_fb_t* fb, uint32_t frame_id)
 
         memcpy(frame->payload, packet_data, packet_size);
 
-        if (xQueueSend(camera_frames, &frame, 0) != pdPASS)
+        if (xQueueSend(camera_frames, &frame, pdMS_TO_TICKS(CAMERA_QUEUE_SEND_TIMEOUT_MS)) != pdPASS)
         {
             ESP_LOGE(TAG, "Failed to send camera frame packet to queue");
             free(frame->payload);
@@ -97,7 +142,7 @@ static void split_frame_and_send_to_queue(camera_fb_t* fb, uint32_t frame_id)
 
 esp_err_t camera_init(void)
 {
-    camera_frames = xQueueCreate(10, sizeof(camera_frame_t*));
+    camera_frames = xQueueCreate(CAMERA_FRAME_QUEUE_LEN, sizeof(camera_frame_t*));
     if (!camera_frames)
     {
         ESP_LOGE(TAG, "Failed to create camera frame queue");
@@ -113,6 +158,9 @@ esp_err_t camera_init(void)
         camera_frames = NULL;
         return err;
     }
+
+    camera_log_capture_config();
+    camera_discard_warmup_frames();
 
     return ESP_OK;
 }
@@ -131,11 +179,32 @@ void camera_capture_task(void* pvParameters)
             continue;
         }
 
+        if (!camera_frame_is_complete_jpeg(fb))
+        {
+            static uint32_t bad_jpeg_count = 0;
+            bad_jpeg_count++;
+            if ((bad_jpeg_count % 32) == 1)
+            {
+                ESP_LOGW(
+                    TAG,
+                    "Dropping invalid JPEG frame: len=%u format=%d head=%02x %02x tail=%02x %02x",
+                    (unsigned)fb->len,
+                    fb->format,
+                    fb->len > 0 ? (unsigned)fb->buf[0] : 0,
+                    fb->len > 1 ? (unsigned)fb->buf[1] : 0,
+                    fb->len > 1 ? (unsigned)fb->buf[fb->len - 2] : 0,
+                    fb->len > 0 ? (unsigned)fb->buf[fb->len - 1] : 0);
+            }
+            esp_camera_fb_return(fb);
+            vTaskDelay(pdMS_TO_TICKS(CAMERA_CAPTURE_INTERVAL_MS));
+            continue;
+        }
+
         // Send the frame buffer to the queue for processing
         split_frame_and_send_to_queue(fb, frame_id);
         esp_camera_fb_return(fb);
         frame_id++;
 
-        vTaskDelay(pdMS_TO_TICKS(100)); // Capture at ~10 FPS
+        vTaskDelay(pdMS_TO_TICKS(CAMERA_CAPTURE_INTERVAL_MS));
     }
 }
