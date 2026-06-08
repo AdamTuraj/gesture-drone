@@ -8,6 +8,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
+.nox/
 .coverage
 .coverage.*
 htmlcov/
@@ -24,16 +26,23 @@ ENV/
 # --- Editor / IDE ---
 .vscode/
 .idea/
+.vs/
 *.code-workspace
 
 # --- OS files ---
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # --- Logs & temp ---
 *.log
 *.tmp
 *.temp
+*.bak
+*.swp
+*.swo
+*~
 
 # --- Generic archives ---
 *.zip
@@ -42,17 +51,37 @@ Thumbs.db
 
 # --- Build / distribution outputs ---
 build/
+install/
+log/
 dist/
 *.egg-info/
+pip-wheel-metadata/
 
-# --- C/C++ / Arduino build artifacts ---
+# --- ROS 2 / colcon ---
+.colcon/
+rosbag2_*/
+*.bag
+*.bag.active
+
+# --- C/C++ / embedded build artifacts ---
 *.o
 *.obj
+*.a
+*.out
+*.exe
 *.elf
 *.bin
 *.hex
 *.map
+*.d
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
 
-# --- Optional local data ---
-# Uncomment if you generate recordings/images locally and don't want them in git
-# Images/Output/
+# --- ESP-IDF ---
+managed_components/
+.espressif/
+sdkconfig
+sdkconfig.old
+
